@@ -14,7 +14,26 @@
   "author": "DrMetr",
   "type": "module",
   "main": "index.js",
+  "bin": {
+    "page-loader": "bin/pageLoaderComand.js"
+  },
   "scripts": {
-    "test": "make test"
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
+  },
+  "dependencies": {
+    "axios": "^1.18.1",
+    "commander": "^15.0.0",
+    "lodash": "^4.18.1",
+    "nock": "^14.0.16",
+    "papaparse": "^5.5.4"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.4.1",
+    "eslint-plugin-jest": "^29.15.2",
+    "globals": "^17.6.0",
+    "jest": "^30.4.2"
   }
 }

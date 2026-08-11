@@ -1,2 +1,5 @@
 ### Hexlet tests and linter status:
+
 [![Actions Status](https://github.com/DrMetr/backend-project-4/actions/workflows/hexlet-check.yml/badge.svg)](https://github.com/DrMetr/backend-project-4/actions)
+
+[[ Asciinema debug testing ](https://asciinema.org/a/LHIsMFTYZBPznfjJ)]

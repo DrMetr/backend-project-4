@@ -1,5 +1,4 @@
-//import pageLoader from "../src/pageLoader.js";
-import createTasks from "../src/progress.js";
+import createTasks from "../src/pageLoader.js";
 import nock from "nock";
 import fs from "fs/promises";
 import path from "node:path";
@@ -7,41 +6,27 @@ import os from "node:os";
 import { cwd } from "node:process";
 import { generateFileName } from "../src/utils/pageLoaderHelperFunctions.js";
 import { getImages, getLinks, getScripts } from "../src/utils/getters.js";
+import paths from "../__fixtures__/paths.js";
 
 nock.disableNetConnect();
 
 let folder;
-
+let tasks;
 const url = "https://ru.hexlet.io/courses";
-const sourcePathImg = path.resolve(
-  `${cwd()}`,
-  "__fixtures__",
-  "ru-hexlet-io-courses.html",
-);
-const fakeImagePath = path.resolve(`${cwd()}`, "__fixtures__", "nodejs.png");
 
-const fakeLink1Path = path.resolve(
-  `${cwd()}`,
-  "__fixtures__",
-  "application.css",
-);
-
-const fakeScriptPath = path.resolve(
-  `${cwd()}`,
-  "__fixtures__",
-  "packs-js-runtime.js",
-);
-
-const sourcePath = path.resolve(
-  `${cwd()}`,
-  "__fixtures__",
-  "ru-hexlet-io-courses-links-and-scripts.html",
-);
+const [
+  sourcePathImg,
+  fakeImagePath,
+  fakeLink1Path,
+  fakeScriptPath,
+  sourcePath,
+] = paths();
 
 //Хук, который делает новую временную папку перед каждым тестом
 beforeEach(async () => {
   const pathPrefix = path.join(os.tmpdir(), "page-loader-");
   folder = await fs.mkdtemp(pathPrefix);
+  tasks = createTasks({ folder, url });
 });
 
 //Хук, который удаляет временную папку
@@ -58,8 +43,6 @@ test(`Loads a page correctly`, async () => {
   nock("https://ru.hexlet.io").get("/courses").reply(200, expected, {
     "Content-Type": "text/html; charset=utf-8",
   });
-  //await pageLoader(folder, url);
-  const tasks = createTasks({ folder, url });
   await tasks.run({ folder, url });
   const result = await fs.readFile(
     path.resolve(`${cwd()}`, folder, `${generateFileName(url, "html")}`),
@@ -80,8 +63,6 @@ test(`Loads all the images too`, async () => {
     })
     .get("/assets/professions/nodejs.png")
     .reply(200, fakeImage, { "Content-Type": "image/png" });
-  //await pageLoader(folder, url);
-  const tasks = createTasks({ folder, url });
   await tasks.run({ folder, url }).catch((err) => {
     console.error(err);
   });
@@ -114,9 +95,6 @@ test(`Loads links and scripts`, async () => {
     .reply(200, fakeLink1, { "Content-Type": "text/css" })
     .get("/packs/js/runtime.js")
     .reply(200, fakeScript, { "Content-Type": "text/javascript" });
-
-  //await pageLoader(folder, url);
-  const tasks = createTasks({ folder, url });
   await tasks.run({ folder, url }).catch((err) => {
     console.error(err);
   });
@@ -138,14 +116,11 @@ test(`Loads links and scripts`, async () => {
 test("nonexistant page", async () => {
   const url = "http://i.don.t.exist.com";
   nock(url).get("/page").replyWithError("An error occured");
-  //await pageLoader(folder, url);
-  const tasks = createTasks({ folder, url });
   await expect(tasks.run({ folder, url })).rejects.toThrow();
 });
 
 //Тестим проброс ошибки при отсутствии папки назначения
 test("no folder", () => {
-  const tasks = createTasks({ folder, url });
   expect(() =>
     tasks.run({ folder: null, url }).catch((e) => {
       throw e;
@@ -155,7 +130,6 @@ test("no folder", () => {
 
 //Тестим проброс ошибки при отсутствии URL
 test("no url", () => {
-  const tasks = createTasks({ folder, url });
   expect(() => tasks.run({ folder })).rejects.toThrow();
 });
 
@@ -165,7 +139,7 @@ test("folder is unaccessible", async () => {
     path.join(os.tmpdir(), "restricted-"),
   );
   await fs.chmod(restrictedFolder, 0o000);
-  const tasks = createTasks({ folder: restrictedFolder, url });
+  tasks = createTasks({ folder: restrictedFolder, url });
   expect(() => tasks.run({ folder: restrictedFolder, url })).rejects.toThrow();
 });
 
@@ -180,6 +154,5 @@ test("no src/href", async () => {
     })
     .get("/error")
     .replyWithError("This image does not exist");
-  const tasks = createTasks({ folder, url });
   expect(tasks.run({ folder, url })).rejects.toThrow();
 });

@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+import Listr from "listr";
 import debug from "debug";
 import fs from "fs/promises";
 import replaceSrc from "./utils/replaceSrc.js";
@@ -10,73 +10,141 @@ import {
 } from "./utils/pageLoaderHelperFunctions.js";
 import path from "node:path";
 
-const log = debug("page-loader");
-const pageLoader = (folder, url) => {
+const createTasks = ({ folder, url }) => {
+  const log = debug("page-loader");
+
   log("Logging is on");
-  if (!url) {
-    log("No url");
-    throw new Error("No url specified, try again");
-  }
-  if (!folder) {
-    log("No folder");
-    throw new Error("No folder specified, try again");
-  }
-  const { filepath, filesFolderName, host, prefix, filesFolderPath } = getInfo(
-    folder,
-    url,
-  );
-  let html = "";
-  let srcList = [];
-
-  return checkFolderAccessibility(folder)
-    .catch((err) => {
-      console.error("An error occured");
-      log("Folder inaccessible");
-      throw new Error(`The folder specified is inaccessible: ${err}`);
-    })
-    .then(() => {
-      return makeRequest(url)
-        .catch((err) => {
-          console.error(`An error occured: ${err}`);
-          throw new Error(err);
-        })
-        .then((data) => {
-          log("Request fulfilled");
-          html = data;
-          srcList = makeSrcList(html, host, url, prefix);
-          const srcListPromises = srcList.map((item) => {
-            const { source, isCallable } = item;
-            if (isCallable) {
-              return makeRequest(new URL(source, url).toString());
-            }
-            return source;
+  return new Listr([
+    {
+      title: "Checking if url is specified",
+      task: (ctx, task) => {
+        if (!url) {
+          log("No url");
+          task.title("No URL");
+          throw new Error();
+        }
+        task.title = "URL OK";
+      },
+    },
+    {
+      title: "Checking if an output is specified",
+      task: (ctx, task) => {
+        if (!folder) {
+          log("No directory specified");
+          task.title("No directory specified");
+          throw new Error();
+        } else {
+          task.title = "Output directory specified";
+          log("Output directory specified");
+          return;
+        }
+      },
+    },
+    {
+      title: "Checking if the output is accessible",
+      task: (ctx, task) => {
+        return checkFolderAccessibility(folder)
+          .then(() => {
+            task.title = "Output directory is accessible";
+            log("Output directory is accessible");
+          })
+          .catch((err) => {
+            log(`Directory inaccessible`);
+            task.title(`Directory inaccessible`);
+            throw err;
           });
-          return fs
-            .mkdir(filesFolderPath, { recursive: true })
-            .then(() => Promise.all(srcListPromises));
-        })
-
-        .then((data) => {
-          const createFilesPromises = srcList.map((_, index) => {
-            const filePath = srcList[index].sourcePath;
-            if (srcList[index].isCallable) {
-              return fs.writeFile(
-                path.resolve(folder, filesFolderName, filePath),
-                data[index],
-              );
-            }
-            return null;
-          });
-          return Promise.all(createFilesPromises).then(() => {
-            log(`Assets saved to ${filesFolderPath}`);
-          });
-        })
-        .then(() => {
-          log("Preparing the final HTML");
-          const newHtml = replaceSrc(html, srcList, filesFolderName);
-          return fs.writeFile(filepath, newHtml);
+      },
+    },
+    {
+      title: "Requesting the page",
+      task: (ctx, task) =>
+        makeRequest(url)
+          .catch((e) => {
+            log(`Error requesting page: ${e}`);
+            throw e;
+          })
+          .then((data) => {
+            log("Page request fulfilled");
+            task.title = "Page request fulfilled";
+            const { filepath, filesFolderName, host, prefix, filesFolderPath } =
+              getInfo(folder, url);
+            ctx.html = data;
+            Object.assign(ctx, {
+              filepath,
+              filesFolderName,
+              host,
+              prefix,
+              filesFolderPath,
+            });
+          }),
+    },
+    {
+      title: "Requesting additional assets",
+      task: (ctx, task) => {
+        log("Requesting additional assets");
+        const { host, prefix, html, filesFolderPath } = ctx;
+        ctx.srcList = makeSrcList(html, host, url, prefix);
+        const srcListPromises = ctx.srcList.map((item) => {
+          const { source, isCallable } = item;
+          if (isCallable) {
+            return makeRequest(new URL(source, url).toString()).catch((err) => {
+              log(`Error loading ${url}`);
+              task.title = "Additional resources error";
+              throw err;
+            });
+          }
+          return source;
         });
-    });
+        return fs
+          .mkdir(filesFolderPath, { recursive: true })
+          .then(() => Promise.all(srcListPromises))
+          .then((data) => {
+            log(`Assets ready`);
+            task.title = `Assets ready`;
+            ctx.assets = data;
+          });
+      },
+    },
+    {
+      title: "Saving assets to a designated folder",
+      task: (ctx, task) => {
+        const { srcList, filesFolderName, assets } = ctx;
+        const createFilesPromises = srcList.map((_, index) => {
+          const filePath = srcList[index].sourcePath;
+          if (srcList[index].isCallable) {
+            return fs.writeFile(
+              path.resolve(folder, filesFolderName, filePath),
+              assets[index],
+            );
+          }
+          return null;
+        });
+        return Promise.all(createFilesPromises)
+          .catch((err) => {
+            log(`Saving assets error`);
+            task.title = `Saving assets error`;
+            throw err;
+          })
+          .then(() => {
+            log(`Assets saved to ${ctx.filesFolderPath}`);
+            task.title = `Assets saved to ${ctx.filesFolderPath}`;
+          });
+      },
+    },
+    {
+      title: "Preparing final html",
+      task: (ctx, task) => {
+        log("Preparing the final HTML");
+        const { html, srcList, filesFolderName, filepath } = ctx;
+        const newHtml = replaceSrc(html, srcList, filesFolderName);
+        return fs.writeFile(filepath, newHtml).catch((err) => {
+          log(`Saving final html error`);
+          task.title = `Saving final html error`;
+          throw err;
+        });
+      },
+    },
+  ]);
 };
 
-export default pageLoader;
+export default createTasks;

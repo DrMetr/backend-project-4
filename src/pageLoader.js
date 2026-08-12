@@ -12,7 +12,6 @@ import path from "node:path";
 
 const createTasks = ({ folder, url }) => {
   const log = debug("page-loader");
-
   log("Logging is on");
   return new Listr([
     {
@@ -20,7 +19,7 @@ const createTasks = ({ folder, url }) => {
       task: (ctx, task) => {
         if (!url) {
           log("No url");
-          task.title("No URL");
+          task.title = "No url specified, try again";
           throw new Error();
         }
         task.title = "URL OK";
@@ -30,8 +29,8 @@ const createTasks = ({ folder, url }) => {
       title: "Checking if an output is specified",
       task: (ctx, task) => {
         if (!folder) {
-          log("No directory specified");
-          task.title("No directory specified");
+          log("No folder specified");
+          task.title = "No folder specified, try again";
           throw new Error();
         } else {
           task.title = "Output directory specified";
@@ -43,25 +42,21 @@ const createTasks = ({ folder, url }) => {
     {
       title: "Checking if the output is accessible",
       task: (ctx, task) => {
-        return checkFolderAccessibility(folder)
-          .then(() => {
-            task.title = "Output directory is accessible";
-            log("Output directory is accessible");
-          })
-          .catch((err) => {
-            log(`Directory inaccessible`);
-            task.title(`Directory inaccessible`);
-            throw err;
-          });
+        log("Directory and URL are present, moving forward");
+        return checkFolderAccessibility(folder).then(() => {
+          task.title = "Output directory is accessible";
+          log("Output directory is accessible");
+        });
       },
     },
     {
       title: "Requesting the page",
       task: (ctx, task) =>
         makeRequest(url)
-          .catch((e) => {
-            log(`Error requesting page: ${e}`);
-            throw e;
+          .catch((err) => {
+            log(`Page request error: ${err}`);
+            task.title = "Page request error";
+            throw err;
           })
           .then((data) => {
             log("Page request fulfilled");

@@ -7,46 +7,35 @@ import {
   makeRequest,
   makeSrcList,
   checkFolderAccessibility,
+  checkURL,
+  getAsset,
 } from "./utils/pageLoaderHelperFunctions.js";
-import path from "node:path";
+import { cwd } from "node:process";
 
 const createTasks = ({ folder, url }) => {
   const log = debug("page-loader");
   log("Logging is on");
+  if (!folder) {
+    folder = cwd();
+  }
+  if (!checkURL(url)) {
+    log("Invalid URL");
+    throw new Error("Invalid URL");
+  }
   return new Listr([
-    {
-      title: "Checking if url is specified",
-      task: (ctx, task) => {
-        if (!url) {
-          log("No url");
-          task.title = "No url specified, try again";
-          throw new Error();
-        }
-        task.title = "URL OK";
-      },
-    },
-    {
-      title: "Checking if an output is specified",
-      task: (ctx, task) => {
-        if (!folder) {
-          log("No folder specified");
-          task.title = "No folder specified, try again";
-          throw new Error();
-        } else {
-          task.title = "Output directory specified";
-          log("Output directory specified");
-          return;
-        }
-      },
-    },
     {
       title: "Checking if the output is accessible",
       task: (ctx, task) => {
-        log("Directory and URL are present, moving forward");
-        return checkFolderAccessibility(folder).then(() => {
-          task.title = "Output directory is accessible";
-          log("Output directory is accessible");
-        });
+        return checkFolderAccessibility(folder)
+          .then(() => {
+            task.title = "Output directory is accessible";
+            log("Output directory is accessible");
+          })
+          .catch(() => {
+            log("Folder inaccessible");
+            task.title = "Folder inaccessible";
+            throw new Error("Folder inaccessible");
+          });
       },
     },
     {
@@ -56,14 +45,14 @@ const createTasks = ({ folder, url }) => {
           .catch((err) => {
             log(`Page request error: ${err}`);
             task.title = "Page request error";
-            throw err;
+            throw new Error("Page request error");
           })
-          .then((data) => {
+          .then((response) => {
             log("Page request fulfilled");
             task.title = "Page request fulfilled";
             const { filepath, filesFolderName, host, prefix, filesFolderPath } =
               getInfo(folder, url);
-            ctx.html = data;
+            ctx.html = response.data;
             Object.assign(ctx, {
               filepath,
               filesFolderName,
@@ -74,55 +63,35 @@ const createTasks = ({ folder, url }) => {
           }),
     },
     {
-      title: "Requesting additional assets",
+      title: "Processing assets",
       task: (ctx, task) => {
-        log("Requesting additional assets");
         const { host, prefix, html, filesFolderPath } = ctx;
         ctx.srcList = makeSrcList(html, host, url, prefix);
-        const srcListPromises = ctx.srcList.map((item) => {
-          const { source, isCallable } = item;
-          if (isCallable) {
-            return makeRequest(new URL(source, url).toString()).catch((err) => {
-              log(`Error loading ${url}`);
-              task.title = "Additional resources error";
-              throw err;
-            });
-          }
-          return source;
-        });
         return fs
           .mkdir(filesFolderPath, { recursive: true })
-          .then(() => Promise.all(srcListPromises))
-          .then((data) => {
-            log(`Assets ready`);
-            task.title = `Assets ready`;
-            ctx.assets = data;
-          });
-      },
-    },
-    {
-      title: "Saving assets to a designated folder",
-      task: (ctx, task) => {
-        const { srcList, filesFolderName, assets } = ctx;
-        const createFilesPromises = srcList.map((_, index) => {
-          const filePath = srcList[index].sourcePath;
-          if (srcList[index].isCallable) {
-            return fs.writeFile(
-              path.resolve(folder, filesFolderName, filePath),
-              assets[index],
-            );
-          }
-          return null;
-        });
-        return Promise.all(createFilesPromises)
-          .catch((err) => {
-            log(`Saving assets error`);
-            task.title = `Saving assets error`;
-            throw err;
+          .catch(() => {
+            task.title = "Error creating assets directory";
+            log("Error creating assets directory");
+            throw new Error("Error creating assets directory");
           })
           .then(() => {
-            log(`Assets saved to ${ctx.filesFolderPath}`);
-            task.title = `Assets saved to ${ctx.filesFolderPath}`;
+            const assetsTasks = ctx.srcList.map((asset) => ({
+              title: `Loading ${asset.source}`,
+              task: () => {
+                console.log(filesFolderPath);
+                getAsset(asset, filesFolderPath, (e) => {
+                  log(`Error saving ${asset.source}`);
+                  task.title = `Error saving ${asset.source}`;
+                  throw new Error(e);
+                });
+              },
+            }));
+            const listr = new Listr(assetsTasks, { concurrent: true });
+            return listr.run();
+          })
+          .then(async () => {
+            const rd = await fs.readdir(filesFolderPath);
+            console.log("RD: ", rd);
           });
       },
     },
@@ -132,11 +101,16 @@ const createTasks = ({ folder, url }) => {
         log("Preparing the final HTML");
         const { html, srcList, filesFolderName, filepath } = ctx;
         const newHtml = replaceSrc(html, srcList, filesFolderName);
-        return fs.writeFile(filepath, newHtml).catch((err) => {
-          log(`Saving final html error`);
-          task.title = `Saving final html error`;
-          throw err;
-        });
+        return fs
+          .writeFile(filepath, newHtml)
+          .catch(() => {
+            log("Saving final html error");
+            task.title = "Saving final html error";
+            throw new Error("Saving final html error");
+          })
+          .then(() => {
+            console.log(`Saved to ${filepath}`);
+          });
       },
     },
   ]);

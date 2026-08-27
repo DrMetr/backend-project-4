@@ -3,9 +3,17 @@ import { createRequire } from "module";
 import axios from "axios";
 import fs from "fs/promises";
 import { getLinks, getImages, getScripts } from "./getters.js";
+import { cwd } from "node:process";
 
 const require = createRequire(import.meta.url);
 require("axios-debug-log");
+
+const checkURL = (url) => {
+  const regex = new RegExp(
+    `^https?://(?:www\\.)?[-a-zA-Z0-9@:%._\\+~#=]{1,256}\\.[a-zA-Z0-9()]{1,6}\\b(?:[-a-zA-Z0-9()@:%_\\+.~#?&/=]*)$`,
+  );
+  return regex.test(url);
+};
 
 const checkFolderAccessibility = (folderPath) => {
   //проверяет доступность папки
@@ -28,14 +36,9 @@ const checkFolderAccessibility = (folderPath) => {
 
 const makeRequest = (url) => {
   //отправляет запрос
-  return axios
-    .get(url, {
-      responseType: "arraybuffer",
-    })
-    .then((response) => response.data)
-    .catch((error) => {
-      throw new Error(error);
-    });
+  return axios.get(url, {
+    responseType: "arraybuffer",
+  });
 };
 
 const isTheSameUrl = (relUrl, base, targetUrl) => {
@@ -80,7 +83,6 @@ const generateFileName = (link, extension = path.extname(link).slice(1)) => {
 };
 
 const getInfo = (folder, url) => {
-  //создает нужные для pageLoader константы
   const filepath = path.resolve(folder, generateFileName(url, "html")),
     filesFolderName = generateFileName(url, "_files"),
     host = new URL(url).host,
@@ -117,9 +119,24 @@ const makeSrcList = (html, host, url, prefix) => {
         ...item,
         isCallable: true,
         sourcePath: prefixed(source, host, prefix),
+        source: new URL(source, url).href,
       };
     }
   });
+};
+
+const getAsset = (asset, filesFolderPath, handleError) => {
+  const { source, sourcePath, isCallable } = asset;
+  if (isCallable) {
+    return makeRequest(source)
+      .then((response) => {
+        const pathToFile = path.resolve(cwd(), filesFolderPath, sourcePath);
+        fs.writeFile(pathToFile, response.data);
+      })
+      .catch(() => {
+        handleError();
+      });
+  }
 };
 
 export {
@@ -131,4 +148,6 @@ export {
   makeRequest,
   makeSrcList,
   checkFolderAccessibility,
+  checkURL,
+  getAsset,
 };

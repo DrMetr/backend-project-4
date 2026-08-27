@@ -15,9 +15,11 @@ import { cwd } from "node:process";
 const createTasks = ({ folder, url }) => {
   const log = debug("page-loader");
   log("Logging is on");
+
   if (!folder) {
     folder = cwd();
   }
+
   if (!checkURL(url)) {
     log("Invalid URL");
     throw new Error("Invalid URL");
@@ -79,10 +81,11 @@ const createTasks = ({ folder, url }) => {
               title: `Loading ${asset.source}`,
               task: () => {
                 console.log(filesFolderPath);
-                getAsset(asset, filesFolderPath, (e) => {
-                  log(`Error saving ${asset.source}`);
-                  task.title = `Error saving ${asset.source}`;
-                  throw new Error(e);
+                return getAsset(asset, filesFolderPath, () => {
+                  const message = `Error saving ${asset.source}`;
+                  log(message);
+                  task.title = message;
+                  throw new Error(message);
                 });
               },
             }));

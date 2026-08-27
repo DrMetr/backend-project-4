@@ -118,19 +118,24 @@ test("nonexistant page", async () => {
 
 //Тестим использование текущей папки для сохранения, если пользователь не назначил папку сам
 test("no folder", async () => {
-  const newTasks = createTasks({ folder: undefined, url });
-  const expected =
-    "<html><head></head><body><h1>I AM SAVED SOMEWHERE</h1></body></html>";
-  nock("https://ru.hexlet.io").get("/courses").reply(200, expected, {
-    "Content-Type": "text/html; charset=utf-8",
-  });
-  await newTasks.run();
-  const result = await fs.readFile(
-    path.resolve(`${cwd()}`, folder, `${generateFileName(url, "html")}`),
-    "utf-8",
-  );
-
-  expect(result).toBe(expected);
+  const prevCwd = process.cwd();
+  process.chdir(folder); // "no folder" => пишем в cwd, а cwd временно = temp-папка
+  try {
+    const newTasks = createTasks({ folder: undefined, url });
+    const expected =
+      "<html><head></head><body><h1>I AM SAVED SOMEWHERE</h1></body></html>";
+    nock("https://ru.hexlet.io").get("/courses").reply(200, expected, {
+      "Content-Type": "text/html; charset=utf-8",
+    });
+    await newTasks.run();
+    const result = await fs.readFile(
+      path.resolve(cwd(), generateFileName(url, "html")),
+      "utf-8",
+    );
+    expect(result).toBe(expected);
+  } finally {
+    process.chdir(prevCwd);
+  }
 });
 
 //Тестим проброс ошибки при неправильном URL
@@ -160,6 +165,6 @@ test("no src/href", async () => {
     .get("/error")
     .replyWithError("This image does not exist");
   await expect(tasks.run()).rejects.toThrow(
-    "Error saving https://ru.hexlet.io/courses/error",
+    "Error saving https://ru.hexlet.io/error",
   );
 });

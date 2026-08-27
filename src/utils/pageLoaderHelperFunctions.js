@@ -3,7 +3,6 @@ import { createRequire } from "module";
 import axios from "axios";
 import fs from "fs/promises";
 import { getLinks, getImages, getScripts } from "./getters.js";
-import { cwd } from "node:process";
 
 const require = createRequire(import.meta.url);
 require("axios-debug-log");
@@ -45,7 +44,9 @@ const isTheSameUrl = (relUrl, base, targetUrl) => {
   // проверяет, является ли относительная ссылка сыылкой на ту же страницу
   targetUrl = new URL(targetUrl);
   if (!URL.canParse(relUrl)) {
-    return new URL(relUrl, targetUrl.protocol + "//" + base) === targetUrl;
+    return (
+      new URL(relUrl, targetUrl.protocol + "//" + base).href === targetUrl.href
+    );
   }
   return false;
 };
@@ -54,9 +55,6 @@ const isCallableUrl = (item, host) => {
   // то есть значение src или href, в котором хост совпадает с хостом таргетного сайта и который нужно заменить как в задании, а не оставить как было
   if (URL.canParse(item)) {
     return new URL(item).host === host;
-  }
-  if (!path.extname(item)) {
-    return false;
   }
   return true;
 };
@@ -83,7 +81,7 @@ const generateFileName = (link, extension = path.extname(link).slice(1)) => {
 };
 
 const getInfo = (folder, url) => {
-  const filepath = path.resolve(folder, generateFileName(url, "html")),
+  const filepath = path.join(folder, generateFileName(url, "html")),
     filesFolderName = generateFileName(url, "_files"),
     host = new URL(url).host,
     prefix = host.replace(/[^a-zA-Z0-9]+/gi, "-") + "-",
@@ -130,7 +128,7 @@ const getAsset = (asset, filesFolderPath, handleError) => {
   if (isCallable) {
     return makeRequest(source)
       .then((response) => {
-        const pathToFile = path.resolve(cwd(), filesFolderPath, sourcePath);
+        const pathToFile = path.join(filesFolderPath, sourcePath);
         fs.writeFile(pathToFile, response.data);
       })
       .catch(() => {

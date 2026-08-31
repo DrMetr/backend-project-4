@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import createTasks from "../src/pageLoader.js";
+import pageLoader from "../src/pageLoader.js";
 import { Command } from "commander";
 
 const program = new Command();
@@ -11,9 +11,8 @@ program
   .option("-o, --output <dir>", "where to store the page")
   .action((url) => {
     const folder = program.opts().output;
-    const tasks = createTasks({ folder, url });
     console.log(
-      tasks.run({ folder, url }).catch((err) => {
+      pageLoader({ folder, url }).catch((err) => {
         console.error(err.message);
         process.exitCode = 1;
       }),

@@ -113,4 +113,4 @@ const createTasks = ({ folder, url }) => {
   ]);
 };
 
-export default createTasks;
+export default (params) => createTasks(params).run();

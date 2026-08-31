@@ -1,4 +1,4 @@
-import createTasks from "../src/pageLoader.js";
+import pageLoader from "../src/pageLoader.js";
 import nock from "nock";
 import fs from "fs/promises";
 import path from "node:path";
@@ -11,7 +11,7 @@ import paths from "../__fixtures__/paths.js";
 nock.disableNetConnect();
 
 let folder;
-let tasks;
+let params;
 const url = "https://ru.hexlet.io/courses";
 
 const [
@@ -26,7 +26,7 @@ const [
 beforeEach(async () => {
   const pathPrefix = path.join(os.tmpdir(), "page-loader-");
   folder = await fs.mkdtemp(pathPrefix);
-  tasks = createTasks({ folder, url });
+  params = { folder, url };
 });
 
 //Хук, который удаляет временную папку
@@ -43,7 +43,7 @@ test(`Loads a page correctly`, async () => {
   nock("https://ru.hexlet.io").get("/courses").reply(200, expected, {
     "Content-Type": "text/html; charset=utf-8",
   });
-  await tasks.run();
+  await pageLoader(params);
   const result = await fs.readFile(
     path.resolve(folder, `${generateFileName(url, "html")}`),
     "utf-8",
@@ -63,7 +63,7 @@ test(`Loads all the images too`, async () => {
     })
     .get("/assets/professions/nodejs.png")
     .reply(200, fakeImage, { "Content-Type": "image/png" });
-  await tasks.run();
+  await pageLoader(params);
   const imgDirPath = path.resolve(folder, `${generateFileName(url, "_files")}`);
   const imgDir = await fs.readdir(imgDirPath);
   console.log("ImgDirPath: ", imgDirPath);
@@ -93,7 +93,7 @@ test(`Loads links and scripts`, async () => {
     .reply(200, fakeLink1, { "Content-Type": "text/css" })
     .get("/packs/js/runtime.js")
     .reply(200, fakeScript, { "Content-Type": "text/javascript" });
-  await tasks.run();
+  await pageLoader(params);
   const resultHtml = await fs.readFile(
     path.resolve(cwd(), folder, `${generateFileName(url, "html")}`),
   );
@@ -113,7 +113,7 @@ test(`Loads links and scripts`, async () => {
 test("nonexistant page", async () => {
   const url = "http://i.don.t.exist.com";
   nock(url).get("/page").replyWithError("An error occured");
-  await expect(tasks.run()).rejects.toThrow();
+  await expect(pageLoader(params)).rejects.toThrow();
 });
 
 //Тестим использование текущей папки для сохранения, если пользователь не назначил папку сам
@@ -121,13 +121,13 @@ test("no folder", async () => {
   const prevCwd = process.cwd();
   process.chdir(folder); // "no folder" => пишем в cwd, а cwd временно = temp-папка
   try {
-    const newTasks = createTasks({ folder: undefined, url });
+    const currentParams = { folder: undefined, url };
     const expected =
       "<html><head></head><body><h1>I AM SAVED SOMEWHERE</h1></body></html>";
     nock("https://ru.hexlet.io").get("/courses").reply(200, expected, {
       "Content-Type": "text/html; charset=utf-8",
     });
-    await newTasks.run();
+    await pageLoader(currentParams);
     const result = await fs.readFile(
       path.resolve(cwd(), generateFileName(url, "html")),
       "utf-8",
@@ -144,8 +144,10 @@ test("folder is unaccessible", async () => {
     path.join(os.tmpdir(), "restricted-"),
   );
   await fs.chmod(restrictedFolder, 0o000);
-  tasks = createTasks({ folder: restrictedFolder, url });
-  expect(() => tasks.run()).rejects.toThrow("Folder inaccessible");
+  const currentParams = { folder: restrictedFolder, url };
+  expect(() => pageLoader(currentParams)).rejects.toThrow(
+    "Folder inaccessible",
+  );
 });
 
 //Тестим проброс ошибки при ошибке загрузки дополнительных ресурсов
@@ -159,7 +161,7 @@ test("no src/href", async () => {
     })
     .get("/error")
     .replyWithError("This image does not exist");
-  await expect(tasks.run()).rejects.toThrow(
+  await expect(pageLoader(params)).rejects.toThrow(
     "Error saving https://ru.hexlet.io/error",
   );
 });

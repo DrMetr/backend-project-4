@@ -52,10 +52,10 @@ const isCallableUrl = (item, host) => {
   return true;
 };
 
-const prefixed = (source, host, prefix) => {
+const prefixed = (source, host, prefix, ext) => {
   //Добавляет префикс к файлам
   if (!source.includes(host)) {
-    return `${prefix + generateFileName(source)}`;
+    return `${prefix + generateFileName(source, ext)}`;
   }
   return generateFileName(source);
 };
@@ -100,10 +100,12 @@ const makeSrcList = (html, host, url, prefix) => {
     if (!isCallableUrl(source, host)) {
       return { ...item, isCallable: false, sourcePath: source };
     } else if (isTheSameUrl(source, host, url)) {
+      console.log("is the same: ", prefixed(source, host, prefix, "html"));
       return {
         ...item,
         isCallable: false,
-        sourcePath: prefixed(source, host, prefix),
+        sourcePath: prefixed(source, host, prefix, "html"),
+        isSameUrlAsPage: true,
       };
     } else {
       return {

@@ -162,3 +162,40 @@ test("no src/href", async () => {
     .replyWithError("This image does not exist");
   await expect(pageLoader(params)).rejects.toThrow();
 });
+
+test("Saves a self-referencing link as html copy", async () => {
+  const url = "https://localhost/blog/about";
+  const html = [
+    "<html><head>",
+    '<link rel="canonical" href="/blog/about">', // ссылка на саму страницу
+    "</head><body></body></html>",
+  ].join("");
+
+  nock("https://localhost")
+    .get("/blog/about")
+    .reply(200, html, { "Content-Type": "text/html; charset=utf-8" });
+
+  await pageLoader({ folder, url });
+
+  // Ожидаемое имя файла — как формирует его сам код (generateFileName/prefixed)
+  const expectedFilesDir = path.join(folder, generateFileName(url, "_files"));
+  const expectedFilePath = path.join(
+    expectedFilesDir,
+    generateFileName(url, "html"),
+  );
+
+  // Файл должен реально существовать на диске
+  const savedContent = await fs.readFile(expectedFilePath, "utf-8");
+
+  // Его содержимое — это скачанная страница целиком
+  expect(savedContent).toBe(html);
+
+  // И ссылка в итоговом html должна указывать именно на этот локальный файл
+  const resultHtml = await fs.readFile(
+    path.join(folder, generateFileName(url, "html")),
+    "utf-8",
+  );
+  expect(resultHtml).toContain(
+    `${generateFileName(url, "_files")}/${generateFileName(url, "html")}`,
+  );
+});

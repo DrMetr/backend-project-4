@@ -66,7 +66,6 @@ test(`Loads all the images too`, async () => {
   await pageLoader(params);
   const imgDirPath = path.resolve(folder, `${generateFileName(url, "_files")}`);
   const imgDir = await fs.readdir(imgDirPath);
-  console.log("ImgDirPath: ", imgDirPath);
   expect(imgDir).toHaveLength(1);
   const resultHtml = await fs.readFile(
     path.resolve(folder, `${generateFileName(url, "html")}`),

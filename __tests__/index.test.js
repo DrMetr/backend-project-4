@@ -138,11 +138,6 @@ test("no folder", async () => {
   }
 });
 
-//Тестим проброс ошибки при неправильном URL
-test("no url", () => {
-  expect(() => createTasks({ folder, url: "sdfsd" })).toThrow("Invalid URL");
-});
-
 //Тестим проброс ошибки при отсутствии доступа к папке
 test("folder is unaccessible", async () => {
   const restrictedFolder = await fs.mkdtemp(

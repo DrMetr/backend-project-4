@@ -7,7 +7,6 @@ import {
   makeRequest,
   makeSrcList,
   checkFolderAccessibility,
-  checkURL,
   getAsset,
 } from "./utils/pageLoaderHelperFunctions.js";
 import { cwd } from "node:process";
@@ -20,34 +19,32 @@ const createTasks = ({ folder, url }) => {
     folder = cwd();
   }
 
-  if (!checkURL(url)) {
-    log("Invalid URL");
-    throw new Error("Invalid URL");
-  }
   return new Listr([
     {
       title: "Checking if the output is accessible",
-      task: (ctx, task) => {
+      task: (task) => {
         return checkFolderAccessibility(folder)
           .then(() => {
             task.title = "Output directory is accessible";
             log("Output directory is accessible");
           })
           .catch(() => {
-            log("Folder inaccessible");
-            task.title = "Folder inaccessible";
-            throw new Error("Folder inaccessible");
+            const message = "Folder inaccessible";
+            log(message);
+            task.title = message;
+            throw new Error(message);
           });
       },
     },
     {
       title: "Requesting the page",
-      task: (ctx, task) =>
-        makeRequest(url)
-          .catch((err) => {
-            log(`Page request error: ${err}`);
-            task.title = "Page request error";
-            throw new Error("Page request error");
+      task: (ctx, task) => {
+        return makeRequest(url)
+          .catch(() => {
+            const message = `Invalid URL: ${url}`;
+            log(message);
+            task.title = message;
+            return Promise.reject(new Error(message));
           })
           .then((response) => {
             log("Page request fulfilled");
@@ -62,7 +59,8 @@ const createTasks = ({ folder, url }) => {
               prefix,
               filesFolderPath,
             });
-          }),
+          });
+      },
     },
     {
       title: "Processing assets",
@@ -80,7 +78,6 @@ const createTasks = ({ folder, url }) => {
             const assetsTasks = ctx.srcList.map((asset) => ({
               title: `Loading ${asset.source}`,
               task: () => {
-                console.log(filesFolderPath);
                 return getAsset(asset, filesFolderPath, () => {
                   const message = `Error saving ${asset.source}`;
                   log(message);
@@ -91,10 +88,6 @@ const createTasks = ({ folder, url }) => {
             }));
             const listr = new Listr(assetsTasks, { concurrent: true });
             return listr.run();
-          })
-          .then(async () => {
-            const rd = await fs.readdir(filesFolderPath);
-            console.log("RD: ", rd);
           });
       },
     },
@@ -107,9 +100,10 @@ const createTasks = ({ folder, url }) => {
         return fs
           .writeFile(filepath, newHtml)
           .catch(() => {
-            log("Saving final html error");
-            task.title = "Saving final html error";
-            throw new Error("Saving final html error");
+            const message = "Saving final html error";
+            log(message);
+            task.title = message;
+            throw new Error(message);
           })
           .then(() => {
             console.log(`Saved to ${filepath}`);

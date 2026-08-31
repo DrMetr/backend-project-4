@@ -14,7 +14,8 @@ program
     const tasks = createTasks({ folder, url });
     console.log(
       tasks.run({ folder, url }).catch((err) => {
-        console.error(err);
+        console.error(err.message);
+        process.exitCode = 1;
       }),
     );
   });

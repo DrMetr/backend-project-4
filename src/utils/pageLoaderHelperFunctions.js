@@ -116,17 +116,13 @@ const makeSrcList = (html, host, url, prefix) => {
   });
 };
 
-const getAsset = (asset, filesFolderPath, handleError) => {
+const getAsset = (asset, filesFolderPath) => {
   const { source, sourcePath, isCallable } = asset;
   if (isCallable) {
-    return makeRequest(source)
-      .then((response) => {
-        const pathToFile = path.join(filesFolderPath, sourcePath);
-        fs.writeFile(pathToFile, response.data);
-      })
-      .catch(() => {
-        handleError();
-      });
+    return makeRequest(source).then(({ data }) => {
+      const pathToFile = path.join(filesFolderPath, sourcePath);
+      return fs.writeFile(pathToFile, Buffer.from(data));
+    });
   }
 };
 

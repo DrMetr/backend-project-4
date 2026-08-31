@@ -161,7 +161,5 @@ test("no src/href", async () => {
     })
     .get("/error")
     .replyWithError("This image does not exist");
-  await expect(pageLoader(params)).rejects.toThrow(
-    "Error saving https://ru.hexlet.io/error",
-  );
+  await expect(pageLoader(params)).rejects.toThrow();
 });

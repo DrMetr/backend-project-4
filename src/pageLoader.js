@@ -10,6 +10,10 @@ import {
   getAsset,
 } from "./utils/pageLoaderHelperFunctions.js";
 import { cwd } from "node:process";
+import axios from "axios";
+import { addLogger } from "axios-debug-log";
+
+addLogger(axios);
 
 const createTasks = ({ folder, url }) => {
   const log = debug("page-loader");

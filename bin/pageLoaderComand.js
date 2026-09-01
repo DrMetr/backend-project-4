@@ -12,7 +12,7 @@ program
   .action((url) => {
     const folder = program.opts().output;
     console.log(
-      pageLoader({ folder, url }).catch((err) => {
+      pageLoader(url, folder).catch((err) => {
         console.error(err.message);
         process.exitCode = 1;
       }),

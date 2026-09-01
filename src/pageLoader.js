@@ -16,7 +16,7 @@ import path from "node:path";
 
 addLogger(axios);
 
-const createTasks = ({ folder = cwd(), url }) => {
+const createTasks = (url, folder = cwd()) => {
   const log = debug("page-loader");
   log("Logging is on");
 
@@ -134,4 +134,4 @@ const createTasks = ({ folder = cwd(), url }) => {
   return tasks;
 };
 
-export default (params) => createTasks(params).run();
+export default (...params) => createTasks(...params).run();

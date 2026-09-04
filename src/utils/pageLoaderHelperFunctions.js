@@ -26,13 +26,6 @@ const checkFolderAccessibility = (folderPath) => {
     });
 };
 
-const makeRequest = (url) => {
-  //отправляет запрос
-  return axios.get(url, {
-    responseType: "arraybuffer",
-  });
-};
-
 const isTheSameUrl = (relUrl, base, targetUrl) => {
   // проверяет, является ли относительная ссылка сыылкой на ту же страницу
   targetUrl = new URL(targetUrl);
@@ -121,10 +114,21 @@ const makeSrcList = (html, host, url, prefix) => {
 const getAsset = (asset, filesFolderPath) => {
   const { source, sourcePath, isCallable } = asset;
   if (isCallable) {
-    return makeRequest(source).then(({ data }) => {
-      const pathToFile = path.join(filesFolderPath, sourcePath);
-      return fs.writeFile(pathToFile, Buffer.from(data));
-    });
+    return axios
+      .get(source, {
+        responseType: "arraybuffer",
+        //Заголовки ниже - для обхода ошибки 403
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+          Accept: "application/json, text/plain, */*",
+          "Accept-Language": "en-US,en;q=0.9",
+        },
+      })
+      .then(({ data }) => {
+        const pathToFile = path.join(filesFolderPath, sourcePath);
+        return fs.writeFile(pathToFile, Buffer.from(data));
+      });
   }
 };
 
@@ -134,7 +138,6 @@ export {
   generateFileName,
   isCallableUrl,
   isTheSameUrl,
-  makeRequest,
   makeSrcList,
   checkFolderAccessibility,
   getAsset,

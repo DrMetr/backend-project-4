@@ -4,7 +4,6 @@ import fs from "fs/promises";
 import replaceSrc from "./utils/replaceSrc.js";
 import {
   getInfo,
-  makeRequest,
   makeSrcList,
   checkFolderAccessibility,
   getAsset,
@@ -34,21 +33,29 @@ const createTasks = (url, folder = cwd()) => {
               const message = "Folder inaccessible";
               log(message);
               task.title = message;
-              return Promise.reject(new Error(message));
+              throw new Error(message);
             });
         },
       },
       {
         title: "Requesting the page",
         task: (ctx, task) => {
-          return makeRequest(url)
-            .catch(() => {
-              const message = `Invalid URL: ${url}`;
+          return axios
+            .get(url, {
+              //Заголовки ниже - для обхода ошибки 403
+              headers: {
+                "User-Agent":
+                  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                Accept: "application/json, text/plain, */*",
+                "Accept-Language": "en-US,en;q=0.9",
+              },
+            })
+            .catch((err) => {
+              const message = `Error requesting ${url}: status code ${err.response.status}`;
               log(message);
               task.title = message;
-              return Promise.reject(new Error(message));
+              throw new Error(message);
             })
-
             .then((response) => {
               log("Page request fulfilled");
               task.title = "Page request fulfilled";
@@ -123,7 +130,7 @@ const createTasks = (url, folder = cwd()) => {
               throw new Error(message);
             })
             .then(() => {
-              console.log(`Saved to ${filepath}`);
+              return `Saved to ${filepath}`;
             });
         },
       },

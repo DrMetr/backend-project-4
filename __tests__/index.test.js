@@ -3,9 +3,7 @@ import nock from "nock";
 import fs from "fs/promises";
 import path from "node:path";
 import os from "node:os";
-import { cwd } from "node:process";
 import { generateFileName } from "../src/utils/pageLoaderHelperFunctions.js";
-import { getImages, getLinks, getScripts } from "../src/utils/getters.js";
 import paths from "../__fixtures__/paths.js";
 
 nock.disableNetConnect();
@@ -14,13 +12,8 @@ let folder;
 let params;
 const url = "https://ru.hexlet.io/courses";
 
-const [
-  sourcePathImg,
-  fakeImagePath,
-  fakeLink1Path,
-  fakeScriptPath,
-  sourcePath,
-] = paths();
+const [sourcePathImg, fakeImagePath, fakeLinkPath, fakeScriptPath, sourcePath] =
+  paths();
 
 //Хук, который делает новую временную папку перед каждым тестом
 beforeEach(async () => {
@@ -68,18 +61,19 @@ test(`Loads all the images too`, async () => {
   const imgDir = await fs.readdir(imgDirPath);
   expect(imgDir).toHaveLength(1);
   const resultHtml = await fs.readFile(
-    path.resolve(folder, `${generateFileName(url, "html")}`),
+    path.join(folder, generateFileName(url, "html")),
+    "utf-8",
   );
-  expect(getImages(resultHtml)).toEqual([
+  expect(resultHtml).toContain(
     "ru-hexlet-io-courses_files/ru-hexlet-io-assets-professions-nodejs.png",
-  ]);
+  );
 });
 
 //Тестим замену href и src в <link> и <script> (шаг 4): заменяет только нужные ссылки, не трогая ссылки с других ресурсов
 test(`Loads links and scripts`, async () => {
   const html = await fs.readFile(sourcePath, "utf-8");
   const fakeImage = await fs.readFile(fakeImagePath);
-  const fakeLink1 = await fs.readFile(fakeLink1Path, "utf-8");
+  const fakeLink = await fs.readFile(fakeLinkPath, "utf-8");
   const fakeScript = await fs.readFile(fakeScriptPath, "utf-8");
   nock("https://ru.hexlet.io")
     .get("/courses")
@@ -89,23 +83,25 @@ test(`Loads links and scripts`, async () => {
     .get("/assets/professions/nodejs.png")
     .reply(200, fakeImage, { "Content-Type": "image/png" })
     .get("/assets/application.css")
-    .reply(200, fakeLink1, { "Content-Type": "text/css" })
+    .reply(200, fakeLink, { "Content-Type": "text/css" })
     .get("/packs/js/runtime.js")
     .reply(200, fakeScript, { "Content-Type": "text/javascript" });
+
   await pageLoader(...params);
+
   const resultHtml = await fs.readFile(
-    path.resolve(cwd(), folder, `${generateFileName(url, "html")}`),
+    path.join(folder, generateFileName(url, "html")),
+    "utf-8",
   );
 
-  expect(getLinks(resultHtml)).toEqual([
+  const expected = [
     "https://cdn2.hexlet.io/assets/menu.css",
     "ru-hexlet-io-courses_files/ru-hexlet-io-assets-application.css",
     "ru-hexlet-io-courses_files/ru-hexlet-io-courses.html",
-  ]);
-  expect(getScripts(resultHtml)).toEqual([
     "https://js.stripe.com/v3/",
     "ru-hexlet-io-courses_files/ru-hexlet-io-packs-js-runtime.js",
-  ]);
+  ];
+  expected.forEach((str) => expect(resultHtml).toContain(str));
 });
 
 //Тестим ошибочные случаи: 404 и т.д.
@@ -128,7 +124,7 @@ test("no folder", async () => {
     });
     await pageLoader(...currentParams);
     const result = await fs.readFile(
-      path.resolve(cwd(), generateFileName(url, "html")),
+      path.resolve(generateFileName(url, "html")),
       "utf-8",
     );
     expect(result).toBe(expected);
@@ -144,13 +140,13 @@ test("folder is unaccessible", async () => {
   );
   await fs.chmod(restrictedFolder, 0o000);
   const currentParams = [url, restrictedFolder];
-  expect(() => pageLoader(...currentParams)).rejects.toThrow(
+  await expect(() => pageLoader(...currentParams)).rejects.toThrow(
     "Folder inaccessible",
   );
 });
 
 //Тестим проброс ошибки при ошибке загрузки дополнительных ресурсов
-test("no src/href", async () => {
+test("src/href error", async () => {
   const noimg = "<html><head></head><body><img src='/error'></body></html>";
 
   nock("https://ru.hexlet.io")
@@ -198,4 +194,54 @@ test("Saves a self-referencing link as html copy", async () => {
   expect(resultHtml).toContain(
     `${generateFileName(url, "_files")}/${generateFileName(url, "html")}`,
   );
+});
+
+//Корректно обрабатывает содержание тегов link, img и script, даже если они находятся не в привычных местах
+test("finds <script> and <link> in the entirety of the document", async () => {
+  const html = `<html><head><script src='/source_of_the_script.js'></script></head><img src="/fake_image.jpeg"><body></body><link href='/anything' /></html>`;
+  const url = "https://ru.hexlet.io/courses";
+  const fakeScript = await fs.readFile(fakeScriptPath, "utf-8");
+  const fakeLink = await fs.readFile(fakeLinkPath, "utf-8");
+  const fakeImage = await fs.readFile(fakeImagePath);
+
+  nock("https://ru.hexlet.io")
+    .get("/courses")
+    .reply(200, html, { "Content-Type": "text/html; charset=utf-8" })
+    .get("/source_of_the_script.js")
+    .reply(200, fakeScript, { "Content-Type": "text/javascript" })
+    .get("/anything")
+    .reply(200, fakeLink, { "Content-Type": "text/css" })
+    .get("/fake_image.jpeg")
+    .reply(200, fakeImage, { "Content-Type": "image/png" });
+
+  await pageLoader(url, folder);
+  const resultHtml = await fs.readFile(
+    path.join(folder, generateFileName(url, "html")),
+    "utf-8",
+  );
+
+  const expected = [
+    "ru-hexlet-io-courses_files/ru-hexlet-io-anything",
+    "ru-hexlet-io-courses_files/ru-hexlet-io-source-of-the-script.js",
+    "ru-hexlet-io-courses_files/ru-hexlet-io-fake-image.jpeg",
+  ];
+
+  expected.forEach((str) => expect(resultHtml).toContain(str));
+});
+
+//Не ломается, если атрибуты тегов отсутствуют
+test("no attributes", async () => {
+  const html =
+    "<html><head><link></head><body><img><script></script></body></html>";
+  nock("https://ru.hexlet.io")
+    .get("/courses")
+    .reply(200, html, { "Content-Type": "text/html; charset=utf-8" });
+
+  await pageLoader(url, folder);
+  const resultHtml = await fs.readFile(
+    path.join(folder, generateFileName(url, "html")),
+    "utf-8",
+  );
+
+  expect(resultHtml).toBe(html);
 });

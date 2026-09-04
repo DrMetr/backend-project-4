@@ -11,12 +11,10 @@ program
   .option("-o, --output <dir>", "where to store the page")
   .action((url) => {
     const folder = program.opts().output;
-    console.log(
-      pageLoader(url, folder).catch((err) => {
-        console.error(err.message);
-        process.exitCode = 1;
-      }),
-    );
+    pageLoader(url, folder).catch((err) => {
+      console.error(err.message);
+      process.exitCode = 1;
+    });
   });
 
 program.parse();
